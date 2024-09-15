@@ -593,6 +593,9 @@ public:
 	FUNC2(camera_set_camera_attributes, RID, RID)
 	FUNC2(camera_set_compositor, RID, RID)
 	FUNC2(camera_set_use_vertical_aspect, RID, bool)
+	FUNC2(camera_set_portal_plane, RID, Plane)
+	FUNC2(camera_set_using_portal_plane, RID, bool)
+
 
 	/* OCCLUDER */
 	FUNCRIDSPLIT(occluder)

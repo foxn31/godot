@@ -692,6 +692,11 @@ void Camera3D::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_cull_mask_value", "layer_number", "value"), &Camera3D::set_cull_mask_value);
 	ClassDB::bind_method(D_METHOD("get_cull_mask_value", "layer_number"), &Camera3D::get_cull_mask_value);
 
+	ClassDB::bind_method(D_METHOD("get_portal_plane"), &Camera3D::get_portal_plane);
+	ClassDB::bind_method(D_METHOD("set_portal_plane", "portal_plane"), &Camera3D::set_portal_plane);
+	ClassDB::bind_method(D_METHOD("is_using_portal_plane"), &Camera3D::is_using_portal_plane);
+	ClassDB::bind_method(D_METHOD("set_using_portal_plane", "using_portal_plane"), &Camera3D::set_using_portal_plane);
+
 	//ClassDB::bind_method(D_METHOD("_camera_make_current"),&Camera::_camera_make_current );
 
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "keep_aspect", PROPERTY_HINT_ENUM, "Keep Width,Keep Height"), "set_keep_aspect_mode", "get_keep_aspect_mode");
@@ -709,6 +714,8 @@ void Camera3D::_bind_methods() {
 	ADD_PROPERTY(PropertyInfo(Variant::VECTOR2, "frustum_offset", PROPERTY_HINT_NONE, "suffix:m"), "set_frustum_offset", "get_frustum_offset");
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "near", PROPERTY_HINT_RANGE, "0.001,10,0.001,or_greater,exp,suffix:m"), "set_near", "get_near");
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "far", PROPERTY_HINT_RANGE, "0.01,4000,0.01,or_greater,exp,suffix:m"), "set_far", "get_far");
+	ADD_PROPERTY(PropertyInfo(Variant::PLANE, "portal_plane", PROPERTY_HINT_NONE, "suffix:m"), "set_portal_plane", "get_portal_plane");
+	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "using_portal_plane"), "set_using_portal_plane", "is_using_portal_plane");
 
 	BIND_ENUM_CONSTANT(PROJECTION_PERSPECTIVE);
 	BIND_ENUM_CONSTANT(PROJECTION_ORTHOGONAL);
@@ -807,6 +814,22 @@ Vector<Plane> Camera3D::get_frustum() const {
 	Projection cm = _get_camera_projection(_near);
 
 	return cm.get_projection_planes(get_camera_transform());
+}
+
+Plane Camera3D::get_portal_plane() const {
+	return portal_plane;
+}
+
+void Camera3D::set_portal_plane(Plane p_portal_plane) {
+	portal_plane = p_portal_plane;
+}
+
+bool Camera3D::is_using_portal_plane() const {
+	return using_portal_plane;
+}
+
+void Camera3D::set_using_portal_plane(bool p_using_portal_plane) {
+	using_portal_plane = p_using_portal_plane;
 }
 
 TypedArray<Plane> Camera3D::_get_frustum() const {

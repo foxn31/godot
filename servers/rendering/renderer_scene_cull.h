@@ -93,6 +93,9 @@ public:
 
 		Transform3D transform;
 
+		Plane portal_plane;
+		bool using_portal_plane;
+
 		Camera() {
 			visible_layers = 0xFFFFFFFF;
 			fov = 75;
@@ -102,6 +105,8 @@ public:
 			size = 1.0;
 			offset = Vector2();
 			vaspect = false;
+			portal_plane = Plane();
+			using_portal_plane = false;
 		}
 	};
 
@@ -120,6 +125,8 @@ public:
 	virtual void camera_set_compositor(RID p_camera, RID p_compositor);
 	virtual void camera_set_use_vertical_aspect(RID p_camera, bool p_enable);
 	virtual bool is_camera(RID p_camera) const;
+	virtual void camera_set_portal_plane(RID p_camera, Plane p_portal_plane);
+	virtual void camera_set_using_portal_plane(RID p_camera, bool p_using_portal_plane);
 
 	/* OCCLUDER API */
 
@@ -251,6 +258,9 @@ public:
 			}
 
 			return true;
+		}
+		_ALWAYS_INLINE_ bool over_plane(const Plane &p_plane) const {
+			return p_plane.is_point_over(Vector3(bounds[0], bounds[1], bounds[2])) || p_plane.is_point_over(Vector3(bounds[3], bounds[4], bounds[5]));
 		}
 	};
 
@@ -1151,6 +1161,8 @@ public:
 		SpinLock lock;
 
 		Frustum frustum;
+		Plane portal_plane;
+		bool using_portal_plane;
 	} cull;
 
 	struct VisibilityCullData {

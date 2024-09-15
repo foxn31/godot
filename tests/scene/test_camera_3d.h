@@ -124,6 +124,13 @@ TEST_CASE("[SceneTree][Camera3D] Getters and setters") {
 		CHECK(test_camera->get_doppler_tracking() == Camera3D::DopplerTracking::DOPPLER_TRACKING_DISABLED);
 	}
 
+	SUBCASE("Portal plane") {
+		test_camera->set_portal_plane(Plane(0, 0, -1, 0));
+		CHECK(test_camera->get_portal_plane() == Plane(0, 0, -1, 0));
+		test_camera->set_using_portal_plane(true);
+		CHECK(test_camera->is_using_portal_plane());
+	}
+
 	memdelete(test_camera);
 }
 

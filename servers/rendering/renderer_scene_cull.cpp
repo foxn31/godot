@@ -152,6 +152,18 @@ bool RendererSceneCull::is_camera(RID p_camera) const {
 	return camera_owner.owns(p_camera);
 }
 
+void RendererSceneCull::camera_set_portal_plane(RID p_camera, Plane p_portal_plane) {
+	Camera *camera = camera_owner.get_or_null(p_camera);
+	ERR_FAIL_NULL(camera);
+	camera->portal_plane = p_portal_plane;
+}
+
+void RendererSceneCull::camera_set_using_portal_plane(RID p_camera, bool p_using_portal_plane) {
+	Camera *camera = camera_owner.get_or_null(p_camera);
+	ERR_FAIL_NULL(camera);
+	camera->using_portal_plane = p_using_portal_plane;
+}
+
 /* OCCLUDER API */
 
 RID RendererSceneCull::occluder_allocate() {
@@ -2753,7 +2765,7 @@ void RendererSceneCull::render_camera(const Ref<RenderSceneBuffers> &p_render_bu
 			} break;
 		}
 
-		camera_data.set_camera(transform, projection, is_orthogonal, vaspect, jitter, camera->visible_layers);
+		camera_data.set_camera(transform, projection, camera->portal_plane, camera->using_portal_plane, is_orthogonal, vaspect, jitter, camera->visible_layers);
 	} else {
 		// Setup our camera for our XR interface.
 		// We can support multiple views here each with their own camera
@@ -2775,9 +2787,9 @@ void RendererSceneCull::render_camera(const Ref<RenderSceneBuffers> &p_render_bu
 		}
 
 		if (view_count == 1) {
-			camera_data.set_camera(transforms[0], projections[0], false, camera->vaspect, jitter, camera->visible_layers);
+			camera_data.set_camera(transforms[0], projections[0], camera->portal_plane, camera->using_portal_plane, false, camera->vaspect, jitter, camera->visible_layers);
 		} else if (view_count == 2) {
-			camera_data.set_multiview_camera(view_count, transforms, projections, false, camera->vaspect);
+			camera_data.set_multiview_camera(view_count, transforms, projections, camera->portal_plane, camera->using_portal_plane, false, camera->vaspect);
 		} else {
 			// this won't be called (see fail check above) but keeping this comment to indicate we may support more then 2 views in the future...
 		}
@@ -2917,17 +2929,20 @@ void RendererSceneCull::_scene_cull(CullData &cull_data, InstanceCullResult &cul
 		InstanceData &idata = cull_data.scenario->instance_data[i];
 		uint32_t visibility_flags = idata.flags & (InstanceData::FLAG_VISIBILITY_DEPENDENCY_HIDDEN_CLOSE_RANGE | InstanceData::FLAG_VISIBILITY_DEPENDENCY_HIDDEN | InstanceData::FLAG_VISIBILITY_DEPENDENCY_FADE_CHILDREN);
 		int32_t visibility_check = -1;
-
+		if (cull_data.cull->using_portal_plane) {
+			std::printf("using portal plane");
+		}
 #define HIDDEN_BY_VISIBILITY_CHECKS (visibility_flags == InstanceData::FLAG_VISIBILITY_DEPENDENCY_HIDDEN_CLOSE_RANGE || visibility_flags == InstanceData::FLAG_VISIBILITY_DEPENDENCY_HIDDEN)
 #define LAYER_CHECK (cull_data.visible_layers & idata.layer_mask)
 #define IN_FRUSTUM(f) (cull_data.scenario->instance_aabbs[i].in_frustum(f))
+#define OVER_PORTAL_PLANE(p) (!cull_data.cull->using_portal_plane || cull_data.scenario->instance_aabbs[i].over_plane(p))
 #define VIS_RANGE_CHECK ((idata.visibility_index == -1) || _visibility_range_check<false>(cull_data.scenario->instance_visibility[idata.visibility_index], cull_data.cam_transform.origin, cull_data.visibility_viewport_mask) == 0)
 #define VIS_PARENT_CHECK (_visibility_parent_check(cull_data, idata))
 #define VIS_CHECK (visibility_check < 0 ? (visibility_check = (visibility_flags != InstanceData::FLAG_VISIBILITY_DEPENDENCY_NEEDS_CHECK || (VIS_RANGE_CHECK && VIS_PARENT_CHECK))) : visibility_check)
 #define OCCLUSION_CULLED (cull_data.occlusion_buffer != nullptr && (cull_data.scenario->instance_data[i].flags & InstanceData::FLAG_IGNORE_OCCLUSION_CULLING) == 0 && cull_data.occlusion_buffer->is_occluded(cull_data.scenario->instance_aabbs[i].bounds, cull_data.cam_transform.origin, inv_cam_transform, *cull_data.camera_matrix, z_near, cull_data.scenario->instance_data[i].occlusion_timeout))
 
 		if (!HIDDEN_BY_VISIBILITY_CHECKS) {
-			if ((LAYER_CHECK && IN_FRUSTUM(cull_data.cull->frustum) && VIS_CHECK && !OCCLUSION_CULLED) || (cull_data.scenario->instance_data[i].flags & InstanceData::FLAG_IGNORE_ALL_CULLING)) {
+			if ((LAYER_CHECK && IN_FRUSTUM(cull_data.cull->frustum) && OVER_PORTAL_PLANE(cull_data.cull->portal_plane) && VIS_CHECK && !OCCLUSION_CULLED) || (cull_data.scenario->instance_data[i].flags & InstanceData::FLAG_IGNORE_ALL_CULLING)) {
 				uint32_t base_type = idata.flags & InstanceData::FLAG_BASE_TYPE_MASK;
 				if (base_type == RS::INSTANCE_LIGHT) {
 					cull_result.lights.push_back(idata.instance);
@@ -3122,6 +3137,7 @@ void RendererSceneCull::_scene_cull(CullData &cull_data, InstanceCullResult &cul
 					continue;
 				}
 				for (uint32_t k = 0; k < cull_data.cull->shadows[j].cascade_count; k++) {
+					// TODO: maybe here too
 					if (IN_FRUSTUM(cull_data.cull->shadows[j].cascades[k].frustum) && VIS_CHECK) {
 						uint32_t base_type = idata.flags & InstanceData::FLAG_BASE_TYPE_MASK;
 
@@ -3137,6 +3153,7 @@ void RendererSceneCull::_scene_cull(CullData &cull_data, InstanceCullResult &cul
 #undef HIDDEN_BY_VISIBILITY_CHECKS
 #undef LAYER_CHECK
 #undef IN_FRUSTUM
+#undef OVER_PORTAL_PLANE
 #undef VIS_RANGE_CHECK
 #undef VIS_PARENT_CHECK
 #undef VIS_CHECK
@@ -3227,6 +3244,9 @@ void RendererSceneCull::_render_scene(const RendererSceneRender::CameraData *p_c
 
 	Vector<Plane> planes = p_camera_data->main_projection.get_projection_planes(p_camera_data->main_transform);
 	cull.frustum = Frustum(planes);
+	// portal plane
+	cull.portal_plane = p_camera_data->portal_plane;
+	cull.using_portal_plane = p_camera_data->using_portal_plane;
 
 	Vector<RID> directional_lights;
 	// directional lights
@@ -3621,7 +3641,7 @@ void RendererSceneCull::render_empty_scene(const Ref<RenderSceneBuffers> &p_rend
 	RENDER_TIMESTAMP("Render Empty 3D Scene");
 
 	RendererSceneRender::CameraData camera_data;
-	camera_data.set_camera(Transform3D(), Projection(), true, false);
+	camera_data.set_camera(Transform3D(), Projection(), Plane(), false, true, false);
 
 	scene_render->render_scene(p_render_buffers, &camera_data, &camera_data, PagedArray<RenderGeometryInstance *>(), PagedArray<RID>(), PagedArray<RID>(), PagedArray<RID>(), PagedArray<RID>(), PagedArray<RID>(), PagedArray<RID>(), environment, RID(), compositor, p_shadow_atlas, RID(), scenario->reflection_atlas, RID(), 0, 0, nullptr, 0, nullptr, 0, nullptr);
 #endif
@@ -3699,7 +3719,7 @@ bool RendererSceneCull::_render_reflection_probe_step(Instance *p_instance, int 
 
 		RENDER_TIMESTAMP("Render ReflectionProbe, Step " + itos(p_step));
 		RendererSceneRender::CameraData camera_data;
-		camera_data.set_camera(xform, cm, false, false);
+		camera_data.set_camera(xform, cm, Plane(), false, false, false);
 
 		Ref<RenderSceneBuffers> render_buffers = RSG::light_storage->reflection_probe_atlas_get_render_buffers(scenario->reflection_atlas);
 		_render_scene(&camera_data, render_buffers, environment, RID(), RID(), RSG::light_storage->reflection_probe_get_cull_mask(p_instance->base), p_instance->scenario->self, RID(), shadow_atlas, reflection_probe->instance, p_step, mesh_lod_threshold, use_shadows);

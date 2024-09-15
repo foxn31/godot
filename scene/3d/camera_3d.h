@@ -75,6 +75,9 @@ private:
 	real_t h_offset = 0.0;
 	KeepAspect keep_aspect = KEEP_HEIGHT;
 
+	Plane portal_plane = Plane(Vector3(0,0,-1), 0.0f);
+	bool using_portal_plane = false;
+
 	RID camera;
 	RID scenario_id;
 
@@ -194,6 +197,12 @@ public:
 
 	virtual Vector<Plane> get_frustum() const;
 	bool is_position_in_frustum(const Vector3 &p_position) const;
+
+	virtual Plane get_portal_plane() const;
+	void set_portal_plane(Plane p_portal_plane);
+
+	bool is_using_portal_plane() const;
+	void set_using_portal_plane(bool p_use_portal_plane);
 
 	void set_environment(const Ref<Environment> &p_environment);
 	Ref<Environment> get_environment() const;
